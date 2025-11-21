@@ -1,0 +1,70 @@
+{
+  "targetUrl": "https://www.amazon.com/",
+  "targetDomain": "www.amazon.com",
+  "scanTimestamp": "2025-11-21T23:50:33.560Z",
+  "beaconDetected": true,
+  "totalRequests": 10,
+  "requests": [
+    {
+      "url": "https://www.amazon.com/cross_border_interstitial_sp/render",
+      "method": "POST",
+      "dataSize": 648,
+      "timestamp": "2025-11-21T23:50:28.212Z"
+    },
+    {
+      "url": "https://unagi.amazon.com/1/events/com.amazon.csm.csa.prod",
+      "method": "POST",
+      "dataSize": 736,
+      "timestamp": "2025-11-21T23:50:28.939Z"
+    },
+    {
+      "url": "https://unagi.amazon.com/1/events/com.amazon.csm.csa.prod",
+      "method": "POST",
+      "dataSize": 69986,
+      "timestamp": "2025-11-21T23:50:28.941Z"
+    },
+    {
+      "url": "https://unagi.amazon.com/1/events/com.amazon.csm.csa.prod",
+      "method": "POST",
+      "dataSize": 69986,
+      "timestamp": "2025-11-21T23:50:28.942Z"
+    },
+    {
+      "url": "https://unagi.amazon.com/1/events/com.amazon.csm.csa.prod",
+      "method": "POST",
+      "dataSize": 474,
+      "timestamp": "2025-11-21T23:50:28.955Z"
+    },
+    {
+      "url": "https://unagi-na.amazon.com/1/events/com.amazon.eel.katal.metrics.core.nexus",
+      "method": "POST",
+      "dataSize": 603,
+      "timestamp": "2025-11-21T23:50:28.969Z"
+    },
+    {
+      "url": "https://unagi-na.amazon.com/1/events/com.amazon.eel.katal.metrics.core.nexus",
+      "method": "POST",
+      "dataSize": 636,
+      "timestamp": "2025-11-21T23:50:29.038Z"
+    },
+    {
+      "url": "https://unagi-na.amazon.com/1/events/com.amazon.csm.nexusclient.prod",
+      "method": "POST",
+      "dataSize": 2277,
+      "timestamp": "2025-11-21T23:50:29.608Z"
+    },
+    {
+      "url": "https://unagi-na.amazon.com/1/events/com.amazon.BotCXPolicy.na.prod.browserDetection",
+      "method": "POST",
+      "dataSize": 2365,
+      "timestamp": "2025-11-21T23:50:30.221Z"
+    },
+    {
+      "url": "https://unagi.amazon.com/1/events/com.amazon.eel.SearchAutocompleteUIServiceMetrics.nexus",
+      "method": "POST",
+      "dataSize": 158,
+      "timestamp": "2025-11-21T23:50:31.203Z"
+    }
+  ],
+  "summary": "⚠️  Found 10 potential beacon tracking request(s)"
+}
