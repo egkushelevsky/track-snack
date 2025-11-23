@@ -1,6 +1,7 @@
 // Tracking pixel detection script
 (function() {
   let trackingPixels = [];
+  let beaconRequests = [];
   let highlightingEnabled = true;
   
   // Common tracking domains
@@ -152,6 +153,31 @@
     });
   }
   
+  // Detect Beacon API usage
+  function detectBeaconAPI() {
+    const originalSendBeacon = navigator.sendBeacon;
+
+    navigator.sendBeacon = function (url, data) {
+      const request = {
+        type: 'beacon',
+        timestamp: new Date().toISOString(),
+        url: url,
+        domain: new URL(url, window.location.origin).hostname,
+        dataSize: data ? new Blob([data]).size : 0,
+        dataType: typeof data,
+        pageUrl: window.location.href,
+        pageDomain: window.location.hostname,
+        src: url
+      };
+
+      beaconRequests.push(request);
+      console.log("🔍 Beacon API Request Detected:", request);
+
+      // Call original method
+      return originalSendBeacon.call(navigator, url, data);
+    };
+  }
+  
   // Toggle highlighting
   function toggleHighlighting(enabled) {
     highlightingEnabled = enabled;
@@ -171,28 +197,40 @@
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getTrackingPixels') {
       console.log('Sending pixel data:', trackingPixels.length, 'pixels found');
+      const allRequests = [...trackingPixels, ...beaconRequests];
       sendResponse({
-        count: trackingPixels.length,
-        pixels: trackingPixels.map(p => ({
+        count: allRequests.length,
+        pixels: allRequests.map(p => ({
           type: p.type,
           src: p.src,
-          dimensions: p.dimensions
+          dimensions: p.dimensions,
+          url: p.url,
+          domain: p.domain,
+          dataSize: p.dataSize
         })),
-        highlightingEnabled: highlightingEnabled
+        highlightingEnabled: highlightingEnabled,
+        beaconCount: beaconRequests.length,
+        pixelCount: trackingPixels.length
       });
     } else if (request.action === 'toggleHighlighting') {
       toggleHighlighting(request.enabled);
       sendResponse({ success: true });
     } else if (request.action === 'rescan') {
       detectTrackingPixels();
+      const allRequests = [...trackingPixels, ...beaconRequests];
       sendResponse({
-        count: trackingPixels.length,
-        pixels: trackingPixels.map(p => ({
+        count: allRequests.length,
+        pixels: allRequests.map(p => ({
           type: p.type,
           src: p.src,
-          dimensions: p.dimensions
+          dimensions: p.dimensions,
+          url: p.url,
+          domain: p.domain,
+          dataSize: p.dataSize
         })),
-        highlightingEnabled: highlightingEnabled
+        highlightingEnabled: highlightingEnabled,
+        beaconCount: beaconRequests.length,
+        pixelCount: trackingPixels.length
       });
     } else if (request.action === 'testOverlay') {
       // Create a test overlay in the center of the screen
@@ -215,6 +253,9 @@
     }
     return true; // Keep the message channel open for async response
   });
+  
+  // Initialize Beacon API detection
+  detectBeaconAPI();
   
   // Run initial detection
   detectTrackingPixels();
