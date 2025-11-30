@@ -5,8 +5,15 @@
   "description": "Detects and highlights tracking pixels on web pages",
   "permissions": [
     "activeTab",
-    "scripting"
+    "scripting",
+    "webRequest"
   ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
   "action": {
     "default_popup": "popup.html",
     "default_icon": {
@@ -19,7 +26,8 @@
     {
       "matches": ["<all_urls>"],
       "js": ["content.js"],
-      "run_at": "document_idle"
+      "run_at": "document_start",
+      "all_frames": true
     }
   ],
   "icons": {

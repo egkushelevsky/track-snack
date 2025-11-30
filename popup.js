@@ -29,10 +29,22 @@ async function loadResults() {
       
       const count = response.count;
       const pixels = response.pixels;
+      const pixelCount = response.pixelCount || 0;
+      const beaconCount = response.beaconCount || 0;
+      
+      // Update banner stats
+      document.getElementById('pixelCountBanner').textContent = pixelCount;
+      document.getElementById('beaconCountBanner').textContent = beaconCount;
+      document.getElementById('totalCountBanner').textContent = count;
       
       // Update toggle state
       if (response.highlightingEnabled !== undefined) {
         document.getElementById('highlightToggle').checked = response.highlightingEnabled;
+      }
+      
+      // Update scan button state
+      if (response.scanningEnabled !== undefined) {
+        updateScanButton(response.scanningEnabled);
       }
       
       // Update count
@@ -66,7 +78,7 @@ async function loadResults() {
         
         const src = document.createElement('div');
         src.className = 'pixel-src';
-        src.textContent = pixel.src || 'No source';
+        src.textContent = pixel.src || pixel.url || 'No source';
         
         item.appendChild(type);
         item.appendChild(src);
@@ -78,10 +90,36 @@ async function loadResults() {
           item.appendChild(dims);
         }
         
+        if (pixel.dataSize !== undefined) {
+          const size = document.createElement('div');
+          size.className = 'pixel-dimensions';
+          size.textContent = `Data Size: ${pixel.dataSize} bytes`;
+          item.appendChild(size);
+        }
+        
         listEl.appendChild(item);
       });
     });
   }, 300);
+}
+
+// Update scan button appearance
+function updateScanButton(isScanning) {
+  const button = document.getElementById('toggleScan');
+  const toggleContainer = document.querySelector('.toggle-container');
+  const highlightToggle = document.getElementById('highlightToggle');
+  
+  if (isScanning) {
+    button.textContent = '⏸️ Stop Scanning';
+    button.className = 'stop-scan';
+    toggleContainer.classList.remove('disabled');
+    highlightToggle.disabled = false;
+  } else {
+    button.textContent = '▶️ Start Scanning';
+    button.className = 'start-scan';
+    toggleContainer.classList.add('disabled');
+    highlightToggle.disabled = true;
+  }
 }
 
 // Highlight toggle
@@ -98,6 +136,29 @@ document.getElementById('highlightToggle').addEventListener('change', async (e) 
     } else {
       label.textContent = '⚫ Highlight pixels on page (OFF)';
     }
+  });
+});
+
+// Toggle scan button
+document.getElementById('toggleScan').addEventListener('click', async () => {
+  const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+  
+  chrome.tabs.sendMessage(tab.id, { action: 'getTrackingPixels' }, (response) => {
+    const currentState = response?.scanningEnabled !== false; // default to true
+    const newState = !currentState;
+    
+    chrome.tabs.sendMessage(tab.id, { 
+      action: 'toggleScanning', 
+      enabled: newState 
+    }, (toggleResponse) => {
+      updateScanButton(newState);
+      if (!newState) {
+        document.getElementById('status').textContent = 'Scanning paused';
+      } else {
+        document.getElementById('status').textContent = 'Scanning active...';
+        loadResults();
+      }
+    });
   });
 });
 
