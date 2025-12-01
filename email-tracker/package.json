@@ -1,0 +1,17 @@
+{
+  "name": "email-tracker",
+  "version": "1.0.0",
+  "description": "Email tracking server",
+  "main": "enhanced-server.js",
+  "scripts": {
+    "start": "node enhanced-server.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "express": "^4.18.2",
+    "geoip-lite": "^1.4.7",
+    "useragent": "^2.3.0"
+  }
+}
