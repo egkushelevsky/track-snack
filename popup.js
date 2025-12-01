@@ -22,8 +22,10 @@ async function loadResults() {
       }
       
       if (!response) {
-        document.getElementById('status').textContent = 'No data available. Try refreshing.';
+        document.getElementById('status').textContent = 'Click "Start Scanning" to begin';
         document.getElementById('status').className = '';
+        // Set initial button state to "start"
+        updateScanButton(false);
         return;
       }
       
@@ -42,17 +44,20 @@ async function loadResults() {
         document.getElementById('highlightToggle').checked = response.highlightingEnabled;
       }
       
-      // Update scan button state
-      if (response.scanningEnabled !== undefined) {
-        updateScanButton(response.scanningEnabled);
-      }
+      // Update scan button state - use actual state from response
+      const scanningEnabled = response.scanningEnabled === true; // Only true if explicitly true
+      updateScanButton(scanningEnabled);
       
       // Update count
       const countEl = document.getElementById('count');
       const statusEl = document.getElementById('status');
       
-      if (count === 0) {
-        statusEl.textContent = 'No tracking pixels detected! ✓';
+      if (!scanningEnabled) {
+        statusEl.textContent = 'Click "Start Scanning" to begin';
+        statusEl.className = '';
+        countEl.textContent = '';
+      } else if (count === 0) {
+        statusEl.textContent = 'No tracking pixels detected! ✔';
         statusEl.className = 'no-pixels';
         countEl.textContent = '';
       } else {
@@ -88,6 +93,22 @@ async function loadResults() {
           dims.className = 'pixel-dimensions';
           dims.textContent = `Dimensions: ${pixel.dimensions}`;
           item.appendChild(dims);
+        }
+        
+        if (pixel.hidden) {
+          const hidden = document.createElement('div');
+          hidden.className = 'pixel-dimensions';
+          hidden.textContent = '🔒 Hidden (display:none or visibility:hidden)';
+          hidden.style.color = '#ff6b6b';
+          hidden.style.fontWeight = 'bold';
+          item.appendChild(hidden);
+        }
+        
+        if (pixel.context && pixel.context !== 'main') {
+          const ctx = document.createElement('div');
+          ctx.className = 'pixel-dimensions';
+          ctx.textContent = `📍 Found in: ${pixel.context}`;
+          item.appendChild(ctx);
         }
         
         if (pixel.dataSize !== undefined) {
@@ -144,7 +165,7 @@ document.getElementById('toggleScan').addEventListener('click', async () => {
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   
   chrome.tabs.sendMessage(tab.id, { action: 'getTrackingPixels' }, (response) => {
-    const currentState = response?.scanningEnabled !== false; // default to true
+    const currentState = response?.scanningEnabled === true; // Only true if explicitly true
     const newState = !currentState;
     
     chrome.tabs.sendMessage(tab.id, { 
@@ -154,9 +175,18 @@ document.getElementById('toggleScan').addEventListener('click', async () => {
       updateScanButton(newState);
       if (!newState) {
         document.getElementById('status').textContent = 'Scanning paused';
+        // Clear the display
+        document.getElementById('pixelCountBanner').textContent = '0';
+        document.getElementById('beaconCountBanner').textContent = '0';
+        document.getElementById('totalCountBanner').textContent = '0';
+        document.getElementById('count').textContent = '';
+        document.getElementById('pixelList').innerHTML = '';
       } else {
         document.getElementById('status').textContent = 'Scanning active...';
-        loadResults();
+        // Wait a moment for the scan to start, then load results
+        setTimeout(() => {
+          loadResults();
+        }, 500);
       }
     });
   });
