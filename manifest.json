@@ -7,6 +7,10 @@
     "activeTab",
     "scripting"
   ],
+  "host_permissions": [
+    "*://mail.google.com/*",
+    "*://*.googleusercontent.com/*"
+  ],
   "action": {
     "default_popup": "popup.html",
     "default_icon": {

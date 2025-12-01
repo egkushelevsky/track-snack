@@ -2,7 +2,9 @@
 (function() {
   let trackingPixels = [];
   let beaconRequests = [];
-  let highlightingEnabled = true;
+  let highlightingEnabled = false; // START WITH HIGHLIGHTING OFF
+  let scanningEnabled = false; // Start paused
+  let observer = null;
   
   // Common tracking domains
   const trackingDomains = [
@@ -17,14 +19,44 @@
     'linkedin.com/px',
     'snapchat.com/tr',
     'tiktok.com/i18n/pixel',
-    'reddit.com/api/pixel'
+    'reddit.com/api/pixel',
+    'analytics.yahoo.com'
   ];
   
   // Highlight detected tracking pixels
-  function highlightElement(element) {
-    if (!highlightingEnabled || element.dataset.hasOverlay === 'true') return;
+  function highlightElement(element, isHidden = false) {
+    if (!highlightingEnabled || !scanningEnabled || element.dataset.hasOverlay === 'true') return;
     
-    // Create a visible red box overlay
+    // Get position for the overlay
+    let rect = element.getBoundingClientRect();
+    
+    // For hidden elements, try to find a nearby visible position
+    if (isHidden || rect.width === 0 || rect.height === 0) {
+      // Try to get position from parent element
+      let parent = element.parentElement;
+      let attempts = 0;
+      while (parent && attempts < 5) {
+        const parentRect = parent.getBoundingClientRect();
+        if (parentRect.width > 0 && parentRect.height > 0) {
+          rect = parentRect;
+          break;
+        }
+        parent = parent.parentElement;
+        attempts++;
+      }
+      
+      // If still no valid position, place it in top-right corner
+      if (rect.width === 0 || rect.height === 0) {
+        rect = {
+          left: window.innerWidth - 30,
+          top: 10,
+          width: 20,
+          height: 20
+        };
+      }
+    }
+    
+    // Create a visible red box overlay (same style for all pixels)
     const overlay = document.createElement('div');
     overlay.className = 'tracking-pixel-overlay';
     overlay.style.cssText = `
@@ -40,7 +72,6 @@
     `;
     
     // Position the overlay using fixed positioning
-    const rect = element.getBoundingClientRect();
     overlay.style.left = rect.left + 'px';
     overlay.style.top = rect.top + 'px';
     
@@ -49,11 +80,27 @@
     document.body.appendChild(overlay);
     element.dataset.hasOverlay = 'true';
     
-    console.log('Highlighted element at:', rect.left, rect.top, 'Source:', element.src || element.outerHTML.substring(0, 100));
+    console.log('Highlighted element at:', rect.left, rect.top, 'Hidden:', isHidden, 'Source:', element.src || element.outerHTML.substring(0, 100));
     
     // Update position on scroll
     const updatePosition = () => {
-      const newRect = element.getBoundingClientRect();
+      let newRect = element.getBoundingClientRect();
+      
+      // For hidden elements, recalculate position
+      if (isHidden || newRect.width === 0 || newRect.height === 0) {
+        let parent = element.parentElement;
+        let attempts = 0;
+        while (parent && attempts < 5) {
+          const parentRect = parent.getBoundingClientRect();
+          if (parentRect.width > 0 && parentRect.height > 0) {
+            newRect = parentRect;
+            break;
+          }
+          parent = parent.parentElement;
+          attempts++;
+        }
+      }
+      
       overlay.style.left = newRect.left + 'px';
       overlay.style.top = newRect.top + 'px';
     };
@@ -64,59 +111,108 @@
   
   // Remove all highlights
   function removeHighlights() {
-    const overlays = document.querySelectorAll('.tracking-pixel-overlay');
-    overlays.forEach(overlay => overlay.remove());
-    
-    // Clear the hasOverlay markers
-    trackingPixels.forEach(pixel => {
-      if (pixel.element && pixel.element.dataset) {
-        delete pixel.element.dataset.hasOverlay;
-      }
+    // Use requestAnimationFrame to ensure DOM operations complete
+    requestAnimationFrame(() => {
+      // Remove ALL overlay elements
+      const overlays = document.querySelectorAll('.tracking-pixel-overlay');
+      overlays.forEach(overlay => {
+        if (overlay && overlay.parentNode) {
+          overlay.parentNode.removeChild(overlay);
+        }
+      });
+      
+      // Clear ALL hasOverlay markers from ALL elements on the page
+      const allElements = document.querySelectorAll('[data-has-overlay]');
+      allElements.forEach(element => {
+        delete element.dataset.hasOverlay;
+      });
+      
+      // Also clear from our tracked pixels
+      trackingPixels.forEach(pixel => {
+        if (pixel.element && pixel.element.dataset) {
+          delete pixel.element.dataset.hasOverlay;
+        }
+      });
     });
   }
   
-  // Detect tracking pixels
-  function detectTrackingPixels() {
-    // Store existing overlays before clearing
-    const existingOverlays = document.querySelectorAll('.tracking-pixel-overlay');
-    const overlayMap = new Map();
+  // Detect tracking pixels in a given document/context
+  function scanDocument(doc, context = 'main') {
+    const foundPixels = [];
     
-    existingOverlays.forEach(overlay => {
-      const key = overlay.style.left + '-' + overlay.style.top;
-      overlayMap.set(key, overlay);
-    });
-    
-    trackingPixels = []; // Clear previous results
+    // Gmail-specific filters to exclude their UI elements
+    const gmailExcludePatterns = [
+      '/images/cleardot.gif',
+      'ui=2&ik=', // attachment preview URLs
+      'view=snatt', // attachment preview URLs
+    ];
     
     // Check images
-    const images = document.querySelectorAll('img');
+    const images = doc.querySelectorAll('img');
     images.forEach(img => {
-      const src = img.src || '';
-      const width = img.width;
-      const height = img.height;
+      const src = img.src || img.getAttribute('src') || '';
       
-      // Check for 1x1 pixels or tracking domains
+      // Skip Gmail's own UI pixels
+      if (gmailExcludePatterns.some(pattern => src.includes(pattern))) {
+        return;
+      }
+      
+      // Skip images with no source
+      if (!src || src === '') {
+        return;
+      }
+      
+      // Get actual dimensions
+      const width = img.width || parseInt(img.getAttribute('width')) || 0;
+      const height = img.height || parseInt(img.getAttribute('height')) || 0;
+      
+      // Get computed style to check for display:none or visibility:hidden
+      const style = window.getComputedStyle(img);
+      const isHidden = style.display === 'none' || 
+                       style.visibility === 'hidden' || 
+                       img.style.display === 'none' ||
+                       img.style.visibility === 'hidden';
+      
+      // Check for 1x1 pixels or tracking domains or hidden images
       const isSmallPixel = (width === 1 && height === 1) || 
-                          (width === 0 && height === 0);
+                          (width === 0 && height === 0) ||
+                          (width <= 1 && height <= 1);
       const isTrackingDomain = trackingDomains.some(domain => src.includes(domain));
       
-      if (isSmallPixel || isTrackingDomain) {
-        trackingPixels.push({
-          type: 'image',
-          src: src,
-          element: img,
-          dimensions: `${width}x${height}`
-        });
-        
-        // Only highlight if not already highlighted
-        if (!img.dataset.hasOverlay || img.dataset.hasOverlay !== 'true') {
-          highlightElement(img);
+      // Check for common tracking patterns in URLs
+      const hasTrackingPattern = src.includes('/track') || 
+                                 src.includes('/pixel') || 
+                                 src.includes('/beacon') ||
+                                 src.includes('.gif') && (width <= 1 || height <= 1 || isHidden);
+      
+      // Check if it's proxied through Gmail but has a tracking URL in the fragment
+      const isGmailProxiedTracking = src.includes('googleusercontent.com') && 
+                                     (src.includes('#https://') || src.includes('#http://')) &&
+                                     (src.includes('/track') || src.includes('/pixel') || src.includes('/beacon'));
+      
+      if (isSmallPixel || isTrackingDomain || (isHidden && hasTrackingPattern) || isGmailProxiedTracking) {
+        // Extract the original URL if it's Gmail-proxied
+        let displayUrl = src;
+        if (src.includes('#http')) {
+          const match = src.match(/#(https?:\/\/.+)$/);
+          if (match) {
+            displayUrl = match[1] + ' (via Gmail proxy)';
+          }
         }
+        
+        foundPixels.push({
+          type: 'image',
+          src: displayUrl,
+          element: img,
+          dimensions: `${width}x${height}`,
+          context: context,
+          hidden: isHidden
+        });
       }
     });
     
     // Check iframes
-    const iframes = document.querySelectorAll('iframe');
+    const iframes = doc.querySelectorAll('iframe');
     iframes.forEach(iframe => {
       const src = iframe.src || '';
       const width = iframe.width;
@@ -126,36 +222,74 @@
       const isTrackingDomain = trackingDomains.some(domain => src.includes(domain));
       
       if (isSmallFrame || isTrackingDomain) {
-        trackingPixels.push({
+        foundPixels.push({
           type: 'iframe',
           src: src,
           element: iframe,
-          dimensions: `${width}x${height}`
+          dimensions: `${width}x${height}`,
+          context: context
         });
-        
-        if (!iframe.dataset.hasOverlay || iframe.dataset.hasOverlay !== 'true') {
-          highlightElement(iframe);
+      }
+      
+      // Try to scan inside the iframe
+      try {
+        if (iframe.contentDocument) {
+          const iframePixels = scanDocument(iframe.contentDocument, 'iframe');
+          foundPixels.push(...iframePixels);
         }
+      } catch (e) {
+        // Cross-origin iframe, can't access
+        console.log('Cannot access iframe content (cross-origin):', src);
       }
     });
     
     // Check scripts that might load pixels
-    const scripts = document.querySelectorAll('script[src]');
+    const scripts = doc.querySelectorAll('script[src]');
     scripts.forEach(script => {
       const src = script.src || '';
       if (trackingDomains.some(domain => src.includes(domain))) {
-        trackingPixels.push({
+        foundPixels.push({
           type: 'script',
           src: src,
-          element: script
+          element: script,
+          context: context
         });
       }
     });
+    
+    return foundPixels;
   }
   
-  // Detect Beacon API usage
+  // Detect tracking pixels
+  function detectTrackingPixels() {
+    if (!scanningEnabled) return;
+    
+    trackingPixels = []; // Clear previous results
+    
+    // Scan main document
+    const pixels = scanDocument(document, 'main');
+    
+    // Add all found pixels
+    trackingPixels.push(...pixels);
+    
+    // Highlight only if highlighting is enabled
+    if (highlightingEnabled) {
+      trackingPixels.forEach(pixel => {
+        if (pixel.element && (!pixel.element.dataset.hasOverlay || pixel.element.dataset.hasOverlay !== 'true')) {
+          highlightElement(pixel.element, pixel.hidden);
+        }
+      });
+    }
+  }
+  
+  // Detect Beacon API usage - MUST be called immediately
   function detectBeaconAPI() {
-    const originalSendBeacon = navigator.sendBeacon;
+    if (!navigator.sendBeacon) {
+      console.log('Beacon API not supported');
+      return;
+    }
+
+    const originalSendBeacon = navigator.sendBeacon.bind(navigator);
 
     navigator.sendBeacon = function (url, data) {
       const request = {
@@ -174,7 +308,38 @@
       console.log("🔍 Beacon API Request Detected:", request);
 
       // Call original method
-      return originalSendBeacon.call(navigator, url, data);
+      return originalSendBeacon(url, data);
+    };
+    
+    console.log('Beacon API detection initialized');
+  }
+  
+  // Intercept fetch requests that might be used for tracking
+  function interceptFetch() {
+    const originalFetch = window.fetch;
+    
+    window.fetch = function(...args) {
+      const url = args[0];
+      const urlString = typeof url === 'string' ? url : url.url;
+      
+      // Check if it's a tracking domain
+      if (trackingDomains.some(domain => urlString.includes(domain))) {
+        const request = {
+          type: 'fetch',
+          timestamp: new Date().toISOString(),
+          url: urlString,
+          domain: new URL(urlString, window.location.origin).hostname,
+          method: args[1]?.method || 'GET',
+          pageUrl: window.location.href,
+          pageDomain: window.location.hostname,
+          src: urlString
+        };
+        
+        beaconRequests.push(request);
+        console.log("🔍 Fetch tracking request detected:", request);
+      }
+      
+      return originalFetch.apply(this, args);
     };
   }
   
@@ -183,13 +348,46 @@
     highlightingEnabled = enabled;
     if (!enabled) {
       removeHighlights();
-    } else {
-      // Re-highlight all detected pixels
+    } else if (scanningEnabled) {
+      // Only re-highlight if scanning is active
       trackingPixels.forEach(pixel => {
         if (pixel.element && pixel.element.dataset.hasOverlay !== 'true') {
-          highlightElement(pixel.element);
+          highlightElement(pixel.element, pixel.hidden);
         }
       });
+    }
+  }
+  
+  // Toggle scanning
+  function toggleScanning(enabled) {
+    scanningEnabled = enabled;
+    if (!enabled) {
+      // Stop observing DOM changes FIRST
+      if (observer) {
+        observer.disconnect();
+      }
+      
+      // Add a small delay to ensure any pending operations complete
+      setTimeout(() => {
+        // Remove all highlights when scanning is stopped
+        removeHighlights();
+        // Clear the tracking arrays
+        trackingPixels = [];
+      }, 100);
+    } else {
+      // Clear any existing data before starting fresh
+      trackingPixels = [];
+      removeHighlights();
+      
+      // Start observing DOM changes
+      if (observer && document.body) {
+        observer.observe(document.body, {
+          childList: true,
+          subtree: true
+        });
+      }
+      // Run a fresh scan when starting
+      detectTrackingPixels();
     }
   }
   
@@ -197,41 +395,75 @@
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'getTrackingPixels') {
       console.log('Sending pixel data:', trackingPixels.length, 'pixels found');
-      const allRequests = [...trackingPixels, ...beaconRequests];
-      sendResponse({
-        count: allRequests.length,
-        pixels: allRequests.map(p => ({
-          type: p.type,
-          src: p.src,
-          dimensions: p.dimensions,
-          url: p.url,
-          domain: p.domain,
-          dataSize: p.dataSize
-        })),
-        highlightingEnabled: highlightingEnabled,
-        beaconCount: beaconRequests.length,
-        pixelCount: trackingPixels.length
+      console.log('Beacon requests found:', beaconRequests.length);
+      
+      // Get beacon requests from background script
+      chrome.runtime.sendMessage({ action: 'getBeaconRequests' }, (bgResponse) => {
+        const bgBeaconRequests = bgResponse?.beaconRequests || [];
+        const allBeaconRequests = [...beaconRequests, ...bgBeaconRequests];
+        const allRequests = [...trackingPixels, ...allBeaconRequests];
+        
+        console.log('Total beacon/network requests:', allBeaconRequests.length);
+        
+        sendResponse({
+          count: allRequests.length,
+          pixels: allRequests.map(p => ({
+            type: p.type,
+            src: p.src,
+            dimensions: p.dimensions,
+            url: p.url,
+            domain: p.domain,
+            dataSize: p.dataSize,
+            method: p.method,
+            requestType: p.requestType,
+            context: p.context,
+            hidden: p.hidden
+          })),
+          highlightingEnabled: highlightingEnabled,
+          scanningEnabled: scanningEnabled,
+          beaconCount: allBeaconRequests.length,
+          pixelCount: trackingPixels.length
+        });
       });
+      
+      return true; // Keep channel open for async response
     } else if (request.action === 'toggleHighlighting') {
       toggleHighlighting(request.enabled);
       sendResponse({ success: true });
+    } else if (request.action === 'toggleScanning') {
+      toggleScanning(request.enabled);
+      sendResponse({ success: true, scanningEnabled: request.enabled });
     } else if (request.action === 'rescan') {
       detectTrackingPixels();
-      const allRequests = [...trackingPixels, ...beaconRequests];
-      sendResponse({
-        count: allRequests.length,
-        pixels: allRequests.map(p => ({
-          type: p.type,
-          src: p.src,
-          dimensions: p.dimensions,
-          url: p.url,
-          domain: p.domain,
-          dataSize: p.dataSize
-        })),
-        highlightingEnabled: highlightingEnabled,
-        beaconCount: beaconRequests.length,
-        pixelCount: trackingPixels.length
+      
+      // Get beacon requests from background script
+      chrome.runtime.sendMessage({ action: 'getBeaconRequests' }, (bgResponse) => {
+        const bgBeaconRequests = bgResponse?.beaconRequests || [];
+        const allBeaconRequests = [...beaconRequests, ...bgBeaconRequests];
+        const allRequests = [...trackingPixels, ...allBeaconRequests];
+        
+        sendResponse({
+          count: allRequests.length,
+          pixels: allRequests.map(p => ({
+            type: p.type,
+            src: p.src,
+            dimensions: p.dimensions,
+            url: p.url,
+            domain: p.domain,
+            dataSize: p.dataSize,
+            method: p.method,
+            requestType: p.requestType,
+            context: p.context,
+            hidden: p.hidden
+          })),
+          highlightingEnabled: highlightingEnabled,
+          scanningEnabled: scanningEnabled,
+          beaconCount: allBeaconRequests.length,
+          pixelCount: trackingPixels.length
+        });
       });
+      
+      return true; // Keep channel open
     } else if (request.action === 'testOverlay') {
       // Create a test overlay in the center of the screen
       const testBox = document.createElement('div');
@@ -254,19 +486,21 @@
     return true; // Keep the message channel open for async response
   });
   
-  // Initialize Beacon API detection
+  // Initialize Beacon API detection IMMEDIATELY (before any page scripts run)
   detectBeaconAPI();
   
-  // Run initial detection
-  detectTrackingPixels();
+  // Intercept fetch requests
+  interceptFetch();
   
-  // Re-run detection when DOM changes
-  const observer = new MutationObserver(() => {
-    detectTrackingPixels();
+  // DON'T run initial detection - wait for user to start scanning
+  // Detection will only run when user clicks "Start Scanning"
+  
+  // Set up observer but don't start it yet
+  observer = new MutationObserver(() => {
+    if (scanningEnabled) {
+      detectTrackingPixels();
+    }
   });
   
-  observer.observe(document.body, {
-    childList: true,
-    subtree: true
-  });
+  // Don't observe until user starts scanning
 })();
