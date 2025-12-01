@@ -40,6 +40,8 @@ Opening the site loads a setup tool, which makes it easy to track specific actio
 ### Tracking results
 We visited the website from multiple devices and browsers. On Chrome, our Track Snack extension picks up 2 tracking pixels and 6 beacon requests.
 
+https://github.com/user-attachments/assets/5c64cfda-4010-4afa-95ae-dbac1b2a9fa3
+
 Within the Events Manager, site visitation and chosen action data populates within 20 minutes. This site does not collect contact data through any user submission, so the automatic advanced matching did not collect any results. However, the pixel collected information on when the page was visited and when each tracked button was clicked, including the device type. For example, we put a tracker on the email contact link, and the tracker reported each time a browser went to send an email.
 
 Below is sample data collected on content views. Source: ViewContent-Devices-Nov 25, 2025, 12_00 AM_Dec 2, 2025, 12_00 AM.csv
