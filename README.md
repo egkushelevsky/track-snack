@@ -1,6 +1,8 @@
 # Track Snack
 ## The Chrome extension that eats tracking pixels for breakfast
 
+![Track Snack](icon48.png)
+
 ### Track Snack is a Chrome extension that detects tracking pixels on sites. This is done through two methods: monitoring calls to the Beacon API and looking for 1x1 pixels in noscript HTML tags. Additionally, Track Snack identifies email-based tracking pixels.
 
 #### There are 2 main ways websites collect your data. 
