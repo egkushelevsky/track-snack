@@ -16,15 +16,16 @@ Specifically, email tracking pixels, which function as embedded image elements w
 #### These pixel tracking methods are wrapped in a Chrome extension that displays a banner of Beacon API calls, highlights noscript tracking pixels on the screen, and in emails with red boxes.
 
 #### How to use our Chrome Extension:
+#### How to use our Chrome Extension:
 - Clone this repo into a repository somewhere on your local device
 - Open Chrome Extensions page
-- Go to chrome://extensions/ in your browser OR click the three dots menu → Extensions → Manage Extensions
+  - Go to chrome://extensions/ in your browser OR click the three dots menu → Extensions → Manage Extensions
 - Toggle the "Developer mode" switch
-- Load your extension
-- Click "Load unpacked" button
-- Navigate to the folder where you cloned your GitHub repo
-- Select the folder containing the manifest.json file
-- Click "Select Folder"
+- Load our extension
+  - Click the "Load unpacked" button
+  - Navigate to the folder where you cloned your GitHub repo
+  - Select the folder containing the manifest.json file
+  - Click "Select Folder"
 - Track Snack should now appear! Make sure it's toggled "on". You might need to pin it to your toolbar.
 - Navigate to any website or email to check it out! https://www.amazon.com/ is great for seeing 1x1 invisible pixels, and https://www.yankeecandle.com/ is great for seeing Beacon requests!
 
