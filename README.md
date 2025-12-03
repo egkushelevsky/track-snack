@@ -16,7 +16,6 @@ Specifically, email tracking pixels, which function as embedded image elements w
 #### These pixel tracking methods are wrapped in a Chrome extension that displays a banner of Beacon API calls, highlights noscript tracking pixels on the screen, and in emails with red boxes.
 
 #### How to use our Chrome Extension:
-#### How to use our Chrome Extension:
 - Clone this repo into a repository somewhere on your local device
 - Open Chrome Extensions page
   - Go to chrome://extensions/ in your browser OR click the three dots menu → Extensions → Manage Extensions
